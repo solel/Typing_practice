@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- ✅ 공통 Firebase 초기화: 여기에만 initializeApp 있어야 함 -->
+  <script type="module" src="./firebase_init.js"></script>
+
+  <title>오성 타자왕</title>
+  <meta name="description" content="오성타자왕" />
+  <link rel="icon" href="school-logo.png" />
+  <link rel="stylesheet" href="./typing_site_v_3_app.css" />
+</head>
+<body>
+  <main class="container">
+    <!-- 상단 브랜드 카드 -->
+    <section class="card card--win" style="margin-top:16px">
+      <div class="winbar">
+        <span class="winbar__dot" style="background:#ef4444"></span>
+        <span class="winbar__dot" style="background:#f59e0b"></span>
+        <span class="winbar__dot" style="background:#22c55e"></span>
+        <span class="winbar__title">오성 타자왕 — 메인</span>
+      </div>
+      <div class="row" style="align-items:center; gap:16px; padding:18px">
+        <img src="school-logo.png" alt="Ohseong High School" class="brand-inline" style="width:64px; height:64px; border-radius:10px" />
+        <div style="flex:1">
+          <h1 class="brand-inline" style="margin:0">천안오성고 타자왕은 누구 ?</h1>
+          <p class="muted" style="margin:.25rem 0 0">학번/이름으로 입장 → 연습 완료 시 자동 기록 저장 → 리더보드 반영</p>
+        </div>
+        <div class="actions">
+          <a href="typing_site_v_3_login.html" class="btn">로그인/입장</a>
+          <a href="typing_site_v_3_practice.html" class="btn btn--primary">타자 시작</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 리더보드 카드 -->
+    <section class="card card--win" id="leaderboard" style="margin-top:16px">
+      <div class="winbar">
+        <span class="winbar__dot" style="background:#ef4444"></span>
+        <span class="winbar__dot" style="background:#f59e0b"></span>
+        <span class="winbar__dot" style="background:#22c55e"></span>
+        <span class="winbar__title">리더보드 Top 10</span>
+      </div>
+      <div style="padding:14px">
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
+          <div class="badge">모드: <b>SOLO</b></div>
+          <div class="actions" style="gap:8px">
+            <a class="btn" href="typing_site_v_3_practice.html">내 기록 갱신</a>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>순위</th>
+                <th>학번</th>
+                <th>이름</th>
+                <th>WPM</th>
+                <th>정확도</th>
+                <th>시간</th>
+              </tr>
+            </thead>
+            <tbody id="lbBody">
+              <tr><td colspan="6" style="text-align:center; padding:12px">불러오는 중…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 사용 방법 -->
+    <section class="card" style="margin-top:16px; padding:16px">
+      <h3 style="margin-top:0">사용 방법</h3>
+      <ol style="margin:0 0 0 18px">
+        <li>상단 <b>로그인/입장</b>에서 학번/이름 입력</li>
+        <li><b>연습 시작</b> 버튼으로 타자 연습</li>
+        <li>완주/종료 시 기록 자동 저장, 본 페이지에서 순위 확인</li>
+      </ol>
+    </section>
+
+    <p class="muted" style="text-align:center; margin:18px 0 32px">© <span id="yy"></span> Cheonan Ohseong High School • Typing Practice</p>
+  </main>
+
+  <script>
+    // 연도 표시
+    document.getElementById('yy').textContent = new Date().getFullYear();
+
+    function renderRows(list){
+      const body = document.getElementById('lbBody');
+      body.innerHTML = '';
+      if(!list || !list.length){
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:12px">기록이 없습니다.</td></tr>';
+        return;
+      }
+      list.forEach((r, i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${r.sid||''}</td><td>${r.sname||''}</td><td>${r.wpm??'-'}</td><td>${r.accuracy??'-'}%</td><td>${Math.round(r.time_sec??0)}s</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    // TypingAPI 준비를 다양한 방법으로 보장
+    async function waitForTypingAPI(timeoutMs = 10000, intervalMs = 100) {
+      const start = Date.now();
+
+      // 1) TypingReady Promise가 있으면 먼저 기다린다
+      if (window.TypingReady) {
+        try { await window.TypingReady; } catch (_) { /* 실패한 경우도 폴링으로 넘어감 */ }
+      }
+
+      // 2) 이미 준비됐으면 바로 반환
+      if (window.TypingAPI && typeof window.TypingAPI.loadLeaderboard === 'function') return true;
+
+      // 3) 폴링으로 최대 timeout까지 대기
+      return await new Promise(resolve => {
+        const t = setInterval(() => {
+          const ready = (window.TypingAPI && typeof window.TypingAPI.loadLeaderboard === 'function');
+          if (ready || (Date.now() - start) > timeoutMs) {
+            clearInterval(t);
+            resolve(ready);
+          }
+        }, intervalMs);
+      });
+    }
+
+    (async () => {
+      const ready = await waitForTypingAPI();
+      if (!ready) {
+        console.error('TypingAPI가 아직 준비되지 않았습니다.');
+        renderRows([]);
+        return;
+      }
+      try {
+        const rows = await window.TypingAPI.loadLeaderboard({ mode: 'solo', top: 10 });
+        renderRows(rows);
+      } catch (e) {
+        console.error(e);
+        renderRows([]);
+      }
+    })();
+  </script>
+</body>
+</html>
